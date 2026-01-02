@@ -1,16 +1,35 @@
-// myscript.js
-document.querySelectorAll("[data-charid]").forEach((elem) => {
-  elem.addEventListener("click", () => {
-    const charId = elem.getAttribute("data-charid");
-    console.log(`Kliknięto element z data-charid: ${charId}`);
-    window.Engine.changePlayer.changePlayerRequest(180566);
-  });
-});
+(function () {
+  const Engine = window.Engine;
 
-// Automatyczne kliknięcie pierwszego elementu z data-charid
-const firstElem = document.querySelector("[data-charid]");
+  function waitFor(getter, interval = 50) {
+    return new Promise((resolve) => {
+      const t = setInterval(() => {
+        const v = getter();
+        if (v) {
+          clearInterval(t);
+          resolve(v);
+        }
+      }, interval);
+    });
+  }
 
-setTimeout(() => {
-  console.log("click");
-  firstElem.click();
-}, 2500);
+  (async () => {
+    console.log("[myscript] start");
+
+    const changePlayer = await waitFor(() =>
+      Engine &&
+      Engine.changePlayer &&
+      typeof Engine.changePlayer.changePlayerRequest === "function"
+        ? Engine.changePlayer
+        : null
+    );
+
+    console.log("[myscript] changePlayer gotowy");
+
+    // 🔥 IDENTYCZNE JAK W DEVTOOLS
+    changePlayer.changePlayerRequest(180566);
+
+    // === TU MOŻESZ DODAWAĆ WIĘCEJ LOGIKI ===
+    // np. automatyczne kliknięcia, eventy itd.
+  })();
+})();
