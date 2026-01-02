@@ -9,4 +9,8 @@ document.querySelectorAll("[data-charid]").forEach((elem) => {
 
 // Automatyczne kliknięcie pierwszego elementu z data-charid
 const firstElem = document.querySelector("[data-charid]");
-if (firstElem) firstElem.click();
+
+setTimeout(() => {
+  console.log("click");
+  firstElem.click();
+}, 2500);
