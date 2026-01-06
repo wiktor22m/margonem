@@ -1,10 +1,7 @@
 (function () {
   console.log("[TitanSelector] myscript.js loaded");
 
-  /***********************
-   * DANE
-   ***********************/
-  const players = window.Engine.changePlayer.charlist.list;
+  const STORAGE_KEY = "player_titan_map";
 
   const titans = [
     "Dziewicza Orlica (51 lvl)",
@@ -20,11 +17,6 @@
     "Tanroth (300 lvl)",
   ];
 
-  const STORAGE_KEY = "player_titan_map";
-
-  /***********************
-   * STORAGE
-   ***********************/
   function loadConfig() {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
   }
@@ -33,10 +25,24 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
   }
 
-  /***********************
-   * UI
-   ***********************/
-  function createUI() {
+  function waitForCharlist() {
+    return new Promise((resolve) => {
+      const i = setInterval(() => {
+        if (
+          window.Engine &&
+          window.Engine.changePlayer &&
+          window.Engine.changePlayer.charlist &&
+          window.Engine.changePlayer.charlist.list &&
+          Object.keys(window.Engine.changePlayer.charlist.list).length > 0
+        ) {
+          clearInterval(i);
+          resolve(window.Engine.changePlayer.charlist.list);
+        }
+      }, 100);
+    });
+  }
+
+  function createUI(players) {
     const container = document.createElement("div");
     container.style.position = "fixed";
     container.style.top = "100px";
@@ -47,7 +53,7 @@
     container.style.padding = "10px";
     container.style.border = "1px solid #444";
     container.style.fontSize = "12px";
-    container.style.width = "260px";
+    container.style.width = "270px";
 
     const title = document.createElement("div");
     title.textContent = "Titan Selector";
@@ -56,9 +62,9 @@
 
     const playerSelect = document.createElement("select");
     playerSelect.style.width = "100%";
-    playerSelect.style.marginBottom = "5px";
+    playerSelect.style.marginBottom = "6px";
 
-    players.forEach((p) => {
+    Object.values(players).forEach((p) => {
       const opt = document.createElement("option");
       opt.value = p.nick;
       opt.textContent = `${p.nick} (${p.world}, ${p.lvl} lvl)`;
@@ -67,7 +73,7 @@
 
     const titanSelect = document.createElement("select");
     titanSelect.style.width = "100%";
-    titanSelect.style.marginBottom = "5px";
+    titanSelect.style.marginBottom = "6px";
 
     titans.forEach((t) => {
       const opt = document.createElement("option");
@@ -77,18 +83,19 @@
     });
 
     const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Zapisz parę";
+    saveBtn.textContent = "Zapisz przypisanie";
     saveBtn.style.width = "100%";
 
     const info = document.createElement("div");
     info.style.marginTop = "6px";
     info.style.fontSize = "11px";
-    info.style.opacity = "0.8";
+    info.style.opacity = "0.85";
+
+    const config = loadConfig();
 
     saveBtn.addEventListener("click", () => {
-      const cfg = loadConfig();
-      cfg[playerSelect.value] = titanSelect.value;
-      saveConfig(cfg);
+      config[playerSelect.value] = titanSelect.value;
+      saveConfig(config);
       info.textContent = `Zapisano: ${playerSelect.value} → ${titanSelect.value}`;
     });
 
@@ -101,30 +108,9 @@
     document.body.appendChild(container);
   }
 
-  /***********************
-   * ENGINE READY
-   ***********************/
-  function waitForEngine() {
-    return new Promise((resolve) => {
-      const i = setInterval(() => {
-        if (
-          window.Engine &&
-          window.Engine.changePlayer &&
-          window.Engine.changePlayer.changePlayerRequest
-        ) {
-          clearInterval(i);
-          resolve();
-        }
-      }, 100);
-    });
-  }
-
-  /***********************
-   * START
-   ***********************/
   (async function start() {
-    await waitForEngine();
-    createUI();
-    console.log("[TitanSelector] UI ready");
+    const players = await waitForCharlist();
+    createUI(players);
+    console.log("[TitanSelector] UI ready, players from Engine");
   })();
 })();
