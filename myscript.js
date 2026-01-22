@@ -3,7 +3,7 @@
 
   console.log("[Addon] start");
 
-  const WS_URL = "margonem-backend-production.up.railway.app";
+  const WS_URL = "wss://margonem-backend-production.up.railway.app";
   const STORAGE_KEY = "player_titan_map";
   const alreadyCalled = [];
 
