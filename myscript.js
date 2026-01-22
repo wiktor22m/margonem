@@ -1,9 +1,101 @@
 (function () {
-  console.log("[TitanSelector] myscript.js loaded");
+  "use strict";
 
+  console.log("[Addon] start");
+
+  const WS_URL = "wss://twoj-serwer.up.railway.app";
   const STORAGE_KEY = "player_titan_map";
+  const alreadyCalled = [];
 
-  const titans = [
+  /* ================= ENGINE WAIT ================= */
+
+  function waitForEngine() {
+    return new Promise((resolve) => {
+      const i = setInterval(() => {
+        if (
+          window.Engine &&
+          Engine.hero &&
+          Engine.changePlayer &&
+          Engine.changePlayer.charlist?.list &&
+          window.API
+        ) {
+          clearInterval(i);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
+  /* ================= WEBSOCKET ================= */
+
+  function connectWS() {
+    const ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          type: "register",
+          nick: Engine.hero.nick,
+        })
+      );
+    };
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+
+      if (data.type === "titan-alert") {
+        handleTitanAlert(data);
+      }
+    };
+
+    return ws;
+  }
+
+  function handleTitanAlert(data) {
+    const cfg = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+
+    for (const [charNick, titanName] of Object.entries(cfg)) {
+      if (titanName === data.titan) {
+        const char = Object.values(Engine.changePlayer.charlist.list).find(
+          (c) => c.nick === charNick
+        );
+
+        if (char) {
+          console.log("[Addon] switching to", char.nick);
+          Engine.changePlayer.changePlayerRequest(char.id);
+        }
+      }
+    }
+  }
+
+  /* ================= NPC DETECTION ================= */
+
+  function setupNpcListener(ws) {
+    API.addCallbackToEvent("newNpc", (npc) => {
+      if (npc.d.wt > 79 && !alreadyCalled.includes(npc.d.nick)) {
+        const tip = npc.tip?.[0] || "";
+
+        if (tip.includes("tytan")) {
+          alreadyCalled.push(npc.d.nick);
+
+          ws.send(
+            JSON.stringify({
+              type: "titan-alert",
+              from: Engine.hero.nick,
+              titan: npc.d.nick,
+              map: Engine.map.d.name,
+            })
+          );
+
+          console.log("[Addon] titan detected:", npc.d.nick);
+        }
+      }
+    });
+  }
+
+  /* ================= UI ================= */
+
+  const TITANS = [
     "Dziewicza Orlica (51 lvl)",
     "Zabójczy Królik (70 lvl)",
     "Renegat Baulus (101 lvl)",
@@ -17,100 +109,55 @@
     "Tanroth (300 lvl)",
   ];
 
-  function loadConfig() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  }
+  function createUI() {
+    const box = document.createElement("div");
+    box.style = `
+          position:fixed;
+          top:80px;
+          right:20px;
+          background:#111;
+          color:#fff;
+          padding:10px;
+          z-index:9999;
+          font-size:12px;
+      `;
 
-  function saveConfig(cfg) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-  }
-
-  function waitForCharlist() {
-    return new Promise((resolve) => {
-      const i = setInterval(() => {
-        if (
-          window.Engine &&
-          window.Engine.changePlayer &&
-          window.Engine.changePlayer.charlist &&
-          window.Engine.changePlayer.charlist.list &&
-          Object.keys(window.Engine.changePlayer.charlist.list).length > 0
-        ) {
-          clearInterval(i);
-          resolve(window.Engine.changePlayer.charlist.list);
-        }
-      }, 100);
-    });
-  }
-
-  function createUI(players) {
-    const container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.top = "100px";
-    container.style.right = "20px";
-    container.style.zIndex = "9999";
-    container.style.background = "#111";
-    container.style.color = "#fff";
-    container.style.padding = "10px";
-    container.style.border = "1px solid #444";
-    container.style.fontSize = "12px";
-    container.style.width = "270px";
-
-    const title = document.createElement("div");
-    title.textContent = "Titan Selector";
-    title.style.fontWeight = "bold";
-    title.style.marginBottom = "8px";
-
-    const playerSelect = document.createElement("select");
-    playerSelect.style.width = "100%";
-    playerSelect.style.marginBottom = "6px";
-
-    Object.values(players).forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.nick;
-      opt.textContent = `${p.nick} (${p.world}, ${p.lvl} lvl)`;
-      playerSelect.appendChild(opt);
+    const charSelect = document.createElement("select");
+    Object.values(Engine.changePlayer.charlist.list).forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p.nick;
+      o.textContent = `${p.nick} (${p.world}, ${p.lvl} lvl)`;
+      charSelect.appendChild(o);
     });
 
     const titanSelect = document.createElement("select");
-    titanSelect.style.width = "100%";
-    titanSelect.style.marginBottom = "6px";
-
-    titans.forEach((t) => {
-      const opt = document.createElement("option");
-      opt.value = t;
-      opt.textContent = t;
-      titanSelect.appendChild(opt);
+    TITANS.forEach((t) => {
+      const o = document.createElement("option");
+      o.value = t;
+      o.textContent = t;
+      titanSelect.appendChild(o);
     });
 
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Zapisz przypisanie";
-    saveBtn.style.width = "100%";
+    const save = document.createElement("button");
+    save.textContent = "Zapisz";
+    save.onclick = () => {
+      const cfg = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      cfg[charSelect.value] = titanSelect.value;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      console.log("[Addon] saved", cfg);
+    };
 
-    const info = document.createElement("div");
-    info.style.marginTop = "6px";
-    info.style.fontSize = "11px";
-    info.style.opacity = "0.85";
-
-    const config = loadConfig();
-
-    saveBtn.addEventListener("click", () => {
-      config[playerSelect.value] = titanSelect.value;
-      saveConfig(config);
-      info.textContent = `Zapisano: ${playerSelect.value} → ${titanSelect.value}`;
-    });
-
-    container.appendChild(title);
-    container.appendChild(playerSelect);
-    container.appendChild(titanSelect);
-    container.appendChild(saveBtn);
-    container.appendChild(info);
-
-    document.body.appendChild(container);
+    box.append(charSelect, titanSelect, save);
+    document.body.appendChild(box);
   }
 
-  (async function start() {
-    const players = await waitForCharlist();
-    createUI(players);
-    console.log("[TitanSelector] UI ready, players from Engine");
+  /* ================= START ================= */
+
+  (async function () {
+    await waitForEngine();
+    const ws = connectWS();
+    setupNpcListener(ws);
+    createUI();
+    console.log("[Addon] ready");
   })();
 })();
